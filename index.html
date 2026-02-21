@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOD Archive - Obliviosa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@600&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://kit.fontawesome.com/6824d55697.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script
+        type="module"
+        src="https://cdn.jsdelivr.net/npm/@bufferhead/nightowl@0.0.14/dist/nightowl.js"
+    ></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <h1 class="header-title">Obliviosa's VOD Archive</h1>
+        <div class="vods-note">
+            <i class="fa-solid fa-exclamation-triangle" aria-hidden="true" style="color: #d97706;"></i>
+            <span>
+                <strong>Note:</strong> All VODs are <strong>unlisted</strong> on YouTube.
+                Anyone with the link can view them—please be cautious when sharing.
+            </span>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value" id="stat-total">0</span>
+                <span class="stat-label">VODs</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-hours">0</span>
+                <span class="stat-label">Hours</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="stat-games">0</span>
+                <span class="stat-label">Games</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="search-section">
+            <div class="search-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="search-input" class="search-input" placeholder="Search VODs by title, game, tags..." autocomplete="off">
+                <button type="button" id="search-clear" class="search-clear" aria-label="Clear search" title="Clear search">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </section>
+
+        <section class="filters-section">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label for="filter-game" class="filter-label">Game</label>
+                    <select id="filter-game" class="filter-select">
+                        <option value="">All games</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-sort" class="filter-label">Sort by</label>
+                    <select id="filter-sort" class="filter-select">
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="longest">Longest first</option>
+                        <option value="shortest">Shortest first</option>
+                        <option value="title">Title A-Z</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-date-from" class="filter-label">Date from</label>
+                    <input type="date" id="filter-date-from" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-date-to" class="filter-label">Date to</label>
+                    <input type="date" id="filter-date-to" class="filter-input">
+                </div>
+                <div class="filter-group filter-tags">
+                    <label class="filter-label">Tags</label>
+                    <div id="filter-tags" class="tag-pills"></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="results-header">
+            <span id="results-count" class="results-count">0 VODs</span>
+        </div>
+
+        <section class="vod-grid" id="vod-grid">
+            <!-- VOD cards rendered by app.js -->
+        </section>
+
+        <div id="no-results" class="no-results" hidden>
+            <i class="fa-solid fa-video-slash"></i>
+            <p>No VODs match your search.</p>
+            <button type="button" id="clear-filters" class="clear-filters-btn">Clear all filters</button>
+        </div>
+    </main>
+
+    <div id="player-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <button type="button" class="modal-close" id="modal-close" aria-label="Close modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <h2 id="modal-title" class="modal-title"></h2>
+                <div class="modal-meta">
+                    <span class="modal-game"></span>
+                    <span class="modal-date"></span>
+                    <span class="modal-duration"></span>
+                </div>
+                <p class="modal-description"></p>
+                <div class="modal-tags" id="modal-tags"></div>
+            </div>
+            <div class="modal-player-wrapper">
+                <div id="youtube-player" class="youtube-player"></div>
+            </div>
+            <div class="modal-nav">
+                <button type="button" id="modal-prev" class="modal-nav-btn" disabled>
+                    <i class="fa-solid fa-chevron-left"></i> Previous
+                </button>
+                <button type="button" id="modal-next" class="modal-nav-btn" disabled>
+                    Next <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="app.js"></script>
+</body>
+</html>
