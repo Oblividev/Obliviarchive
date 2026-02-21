@@ -9,7 +9,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = 3000;
-const REMOTE_VODS = 'https://oblividev.github.io/vods/data/vods.json';
+const REMOTE_VODS = 'https://obliviarchive.officiallysp.net/data/vods.json';
 const LOCAL_VODS = path.join(__dirname, 'data', 'vods.json');
 
 // Proxy /data/vods.json from remote, fallback to local

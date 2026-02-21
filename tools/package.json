@@ -1,0 +1,11 @@
+{
+  "name": "vod-manager",
+  "version": "1.0.0",
+  "description": "CLI tool for managing Obliviosa VOD archive",
+  "type": "module",
+  "scripts": {
+    "add": "node vod-manager.js add",
+    "list": "node vod-manager.js list",
+    "stats": "node vod-manager.js stats"
+  }
+}
