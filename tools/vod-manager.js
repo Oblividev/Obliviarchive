@@ -11,7 +11,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_PATH = join(__dirname, '..', 'vods', 'data', 'vods.json');
+const DATA_PATH = join(__dirname, '..', 'data', 'vods.json');
 
 function loadData() {
     if (!existsSync(DATA_PATH)) {
