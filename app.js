@@ -254,10 +254,14 @@
         elements.modalPrev.disabled = index === 0;
         elements.modalNext.disabled = index === filteredVods.length - 1;
 
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${window.scrollY}px`;
+        document.body.style.width = '100%';
+
         elements.modal.hidden = false;
         elements.modal.scrollTop = 0;
         elements.modal.querySelector('.modal-content').scrollTop = 0;
-        document.body.style.overflow = 'hidden';
 
         if (typeof YT !== 'undefined' && YT.Player) {
             initPlayer(vod.youtubeId);
@@ -266,6 +270,16 @@
         }
 
         syncToUrl(vod.id);
+    }
+
+    function scrollVideoIntoView() {
+        const wrapper = document.querySelector('.modal-player-wrapper');
+        if (wrapper) {
+            wrapper.scrollIntoView({ block: 'start', behavior: 'instant' });
+        }
+        elements.modal.scrollTop = 0;
+        const content = elements.modal.querySelector('.modal-content');
+        if (content) content.scrollTop = 0;
     }
 
     function initPlayer(youtubeId) {
@@ -282,12 +296,27 @@
                 autoplay: 1,
                 enablejsapi: 1,
             },
+            events: {
+                onReady: () => {
+                    requestAnimationFrame(() => {
+                        setTimeout(scrollVideoIntoView, 100);
+                        setTimeout(scrollVideoIntoView, 400);
+                    });
+                },
+            },
         });
     }
 
     function closeModal() {
         elements.modal.hidden = true;
+        const scrollY = document.body.style.top;
         document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY, 10) * -1);
+        }
         if (player) {
             player.destroy();
             player = null;
