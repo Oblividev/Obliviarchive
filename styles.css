@@ -375,9 +375,11 @@ body {
     inset: 0;
     z-index: 1000;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 1rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .modal[hidden] {
@@ -395,8 +397,10 @@ body {
     position: relative;
     width: 100%;
     max-width: 900px;
-    max-height: 95vh;
+    max-height: min(95vh, 100%);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     background: var(--bg-card);
     border-radius: 12px;
     border: 1px solid var(--border-subtle);
