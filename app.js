@@ -205,14 +205,21 @@
         elements.noResults.hidden = filteredVods.length > 0;
         elements.vodGrid.hidden = filteredVods.length === 0;
 
+        const PLACEHOLDER_THUMB = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect fill='%232a2a2a' width='320' height='180'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo thumbnail%3C/text%3E%3C/svg%3E";
+
         elements.vodGrid.innerHTML = filteredVods.map((vod, index) => {
-            const thumbUrl = `https://img.youtube.com/vi/${vod.youtubeId || 'dQw4w9WgXcQ'}/maxresdefault.jpg`;
-            const fallbackUrl = `https://img.youtube.com/vi/${vod.youtubeId || 'dQw4w9WgXcQ'}/hqdefault.jpg`;
+            const vid = vod.youtubeId || 'dQw4w9WgXcQ';
+            const isPlaylistId = vid.startsWith('PL');
+            const thumbUrl = isPlaylistId ? PLACEHOLDER_THUMB : `https://img.youtube.com/vi/${vid}/maxresdefault.jpg`;
+            const fallbackUrl = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
             const duration = vod.duration || formatDuration(vod.durationSeconds || 0);
+            const imgAttrs = isPlaylistId
+                ? `src="${PLACEHOLDER_THUMB}" alt="" loading="lazy"`
+                : `src="${thumbUrl}" alt="" data-fb="${fallbackUrl}" data-ph="${PLACEHOLDER_THUMB}" onload="if(this.naturalHeight<=90){var u=this.dataset.fb;if(u){this.dataset.fb='';this.src=u}}" onerror="var u=this.dataset.fb;if(u){this.dataset.fb='';this.src=u}else{this.src=this.dataset.ph}" loading="lazy"`;
             return `
                 <article class="vod-card" data-index="${index}" data-id="${escapeHtml(vod.id)}">
                     <div class="vod-card-thumb">
-                        <img src="${thumbUrl}" alt="" onerror="this.src='${fallbackUrl}'" loading="lazy">
+                        <img ${imgAttrs}>
                         <span class="vod-card-duration">${escapeHtml(duration)}</span>
                     </div>
                     <div class="vod-card-body">
@@ -248,6 +255,8 @@
         elements.modalNext.disabled = index === filteredVods.length - 1;
 
         elements.modal.hidden = false;
+        elements.modal.scrollTop = 0;
+        elements.modal.querySelector('.modal-content').scrollTop = 0;
         document.body.style.overflow = 'hidden';
 
         if (typeof YT !== 'undefined' && YT.Player) {
