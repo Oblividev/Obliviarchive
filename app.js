@@ -19,7 +19,6 @@
         filterSort: document.getElementById('filter-sort'),
         filterDateFrom: document.getElementById('filter-date-from'),
         filterDateTo: document.getElementById('filter-date-to'),
-        filterTags: document.getElementById('filter-tags'),
         vodGrid: document.getElementById('vod-grid'),
         noResults: document.getElementById('no-results'),
         resultsCount: document.getElementById('results-count'),
@@ -34,7 +33,6 @@
         modalDate: document.querySelector('.modal-date'),
         modalDuration: document.querySelector('.modal-duration'),
         modalDescription: document.querySelector('.modal-description'),
-        modalTags: document.getElementById('modal-tags'),
         modalPrev: document.getElementById('modal-prev'),
         modalNext: document.getElementById('modal-next'),
     };
@@ -102,7 +100,7 @@
      */
     function initFuse() {
         fuse = new Fuse(allVods, {
-            keys: ['title', 'game', 'description', 'tags'],
+            keys: ['title', 'game', 'description'],
             threshold: 0.3,
         });
     }
@@ -119,18 +117,13 @@
     }
 
     /**
-     * Populate filter dropdowns and tag pills
+     * Populate filter dropdowns
      */
     function populateFilters() {
         const games = [...new Set(allVods.map((v) => v.game).filter(Boolean))].sort();
-        const tags = [...new Set(allVods.flatMap((v) => v.tags || []))].sort();
 
         elements.filterGame.innerHTML = '<option value="">All games</option>' +
             games.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-
-        elements.filterTags.innerHTML = tags.map((t) =>
-            `<button type="button" class="tag-pill" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`
-        ).join('');
     }
 
     function escapeHtml(str) {
@@ -166,12 +159,6 @@
         }
         if (dateTo) {
             list = list.filter((v) => v.date <= dateTo);
-        }
-
-        // Tag filter (active pills)
-        const activeTags = [...elements.filterTags.querySelectorAll('.tag-pill.active')].map((p) => p.dataset.tag);
-        if (activeTags.length > 0) {
-            list = list.filter((v) => (v.tags || []).some((t) => activeTags.includes(t)));
         }
 
         // Sort
@@ -247,9 +234,6 @@
         elements.modalDate.textContent = vod.date ? formatDate(vod.date) : '';
         elements.modalDuration.textContent = vod.duration || formatDuration(vod.durationSeconds || 0);
         elements.modalDescription.textContent = vod.description || '';
-        elements.modalTags.innerHTML = (vod.tags || []).map((t) =>
-            `<span class="modal-tag">${escapeHtml(t)}</span>`
-        ).join('');
 
         elements.modalPrev.disabled = index === 0;
         elements.modalNext.disabled = index === filteredVods.length - 1;
@@ -392,22 +376,12 @@
         elements.filterDateFrom.addEventListener('change', () => { render(); updateUrl(); });
         elements.filterDateTo.addEventListener('change', () => { render(); updateUrl(); });
 
-        elements.filterTags.addEventListener('click', (e) => {
-            const pill = e.target.closest('.tag-pill');
-            if (pill) {
-                pill.classList.toggle('active');
-                render();
-                updateUrl();
-            }
-        });
-
         elements.clearFilters.addEventListener('click', () => {
             elements.searchInput.value = '';
             elements.filterGame.value = '';
             elements.filterSort.value = 'newest';
             elements.filterDateFrom.value = '';
             elements.filterDateTo.value = '';
-            elements.filterTags.querySelectorAll('.tag-pill.active').forEach((p) => p.classList.remove('active'));
             render();
             window.history.replaceState({}, '', window.location.pathname);
         });

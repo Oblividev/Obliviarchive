@@ -45,7 +45,7 @@
         <section class="search-section">
             <div class="search-wrapper">
                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="search-input" class="search-input" placeholder="Search VODs by title, game, tags..." autocomplete="off">
+                <input type="text" id="search-input" class="search-input" placeholder="Search VODs by title, game, description..." autocomplete="off">
                 <button type="button" id="search-clear" class="search-clear" aria-label="Clear search" title="Clear search">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -77,10 +77,6 @@
                 <div class="filter-group">
                     <label for="filter-date-to" class="filter-label">Date to</label>
                     <input type="date" id="filter-date-to" class="filter-input">
-                </div>
-                <div class="filter-group filter-tags">
-                    <label class="filter-label">Tags</label>
-                    <div id="filter-tags" class="tag-pills"></div>
                 </div>
             </div>
         </section>
@@ -114,7 +110,6 @@
                     <span class="modal-duration"></span>
                 </div>
                 <p class="modal-description"></p>
-                <div class="modal-tags" id="modal-tags"></div>
             </div>
             <div class="modal-player-wrapper">
                 <div id="youtube-player" class="youtube-player"></div>
