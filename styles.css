@@ -208,41 +208,6 @@ body {
     border-color: var(--twitch-purple);
 }
 
-.filter-tags {
-    flex: 1;
-    min-width: 200px;
-}
-
-.tag-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.tag-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.8rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 20px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.tag-pill:hover {
-    border-color: var(--twitch-purple);
-    color: var(--twitch-purple);
-}
-
-.tag-pill.active {
-    background: var(--twitch-purple-dim);
-    border-color: var(--twitch-purple);
-    color: var(--twitch-purple);
-}
-
 /* Results header */
 .results-header {
     margin-bottom: 1rem;
@@ -455,20 +420,6 @@ body {
     color: var(--text-secondary);
     margin: 0 0 0.75rem;
     line-height: 1.5;
-}
-
-.modal-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.modal-tag {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    background: var(--twitch-purple-dim);
-    color: var(--twitch-purple);
-    border-radius: 4px;
 }
 
 .modal-player-wrapper {
