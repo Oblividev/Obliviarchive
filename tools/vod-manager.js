@@ -20,7 +20,11 @@ function loadData() {
     return JSON.parse(readFileSync(DATA_PATH, 'utf-8'));
 }
 
+/** Keep the file in chronological order so appends don't scatter entries. */
 function saveData(data) {
+    data.vods = [...(data.vods || [])].sort(
+        (a, b) => (a.date || '').localeCompare(b.date || '') || (a.id || '').localeCompare(b.id || '')
+    );
     writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -51,7 +55,8 @@ function computeAutotags(vod) {
     }
 
     if (/christmas|xmas/i.test(t)) push('Holiday');
-    if (/last stream of 202\d|new year/i.test(t)) push('Year End');
+    if (/last stream of 202\d|(?<!lunar )new year/i.test(t)) push('Year End');
+    if (/lunar new year/i.test(t)) push('Lunar New Year');
     if (/women'?s day/i.test(t)) {
         push('Event');
         push("Women's Day");
@@ -119,6 +124,7 @@ function computeAutotags(vod) {
         push('Co-op');
         push('Horror');
     }
+    if (/^resident evil/i.test(game)) push('Horror');
 
     const out = [];
     if (game) out.push(game);
@@ -175,6 +181,170 @@ function formatDuration(seconds) {
         return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
     return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+const YT_HEADERS = {
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    'Accept-Language': 'en-US,en',
+};
+
+/** Uploader name stamped into raw VOD titles; stripped for display. */
+const CHANNEL_NOISE = /\bObliviosa\s*Official\b/gi;
+/** Trailing language/encoder tail: "ENG／FR", "[Eng／Fr]nvenc_av1_10bit", "Eng／Fr video". */
+const ENCODER_NOISE = /[\s\[(]+ENG\b[\s\S]*$|[\s\[(]+nvenc[\s\S]*$/i;
+/** Leading "M D YY" / "[M-D-YY] -" stream-date stamp. */
+const DATE_PREFIX = /^\s*\[?\s*(\d{1,2})[\s\-/.](\d{1,2})[\s\-/.](\d{2})\s*\]?\s*-?\s*/;
+
+const TITLE_MAX = 100;
+const ID_MAX = 95;
+
+/**
+ * Raw uploads are titled "M D YY ObliviosaOfficial   Real title ENG／FR".
+ * Returns the stream date from that prefix (falling back to the upload date)
+ * plus the leftover title text.
+ */
+function parseRawTitle(rawTitle, fallbackDate) {
+    let date = fallbackDate;
+    let rest = rawTitle;
+
+    const m = rawTitle.match(DATE_PREFIX);
+    if (m) {
+        const [, mm, dd, yy] = m;
+        const year = 2000 + Number(yy);
+        const month = Number(mm);
+        const day = Number(dd);
+        if (year >= 2015 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            rest = rawTitle.slice(m[0].length);
+        }
+    }
+    return { date, rest };
+}
+
+/**
+ * Match the archive's display style: Title Case, but leave all-caps words
+ * (REPO, REQUIEM) alone and capitalise after digits ("1st" -> "1St").
+ */
+function titleCase(str) {
+    return str.replace(/\S+/g, (word) => {
+        if (word.length > 1 && word === word.toUpperCase() && /[A-Z]/.test(word)) return word;
+        return word
+            .toLowerCase()
+            .replace(/^([^a-z0-9]*)([a-z])/, (_, lead, ch) => lead + ch.toUpperCase())
+            .replace(/(\d)([a-z])/g, (_, d, ch) => d + ch.toUpperCase());
+    });
+}
+
+/** Strip uploader stamp and encoder tail, normalise case and spacing, cap length. */
+function cleanTitle(restOfTitle) {
+    const cleaned = titleCase(
+        restOfTitle.replace(CHANNEL_NOISE, ' ').replace(ENCODER_NOISE, '').replace(/\s+/g, ' ').trim()
+    );
+    return cleaned.length > TITLE_MAX ? cleaned.slice(0, TITLE_MAX).trim() : cleaned;
+}
+
+/** Archive ids read "M-D-YY-slug-of-title". */
+function makeId(title, date, videoId, takenIds) {
+    const [y, m, d] = date.split('-');
+    const prefix = `${Number(m)}-${Number(d)}-${y.slice(2)}-`;
+    const base = (prefix + slugify(title)).slice(0, ID_MAX).replace(/-+$/, '') || `vod-${videoId}`;
+    if (!takenIds.has(base)) return base;
+    for (let n = 2; n < 100; n++) {
+        const candidate = `${base}-${n}`;
+        if (!takenIds.has(candidate)) return candidate;
+    }
+    return `vod-${videoId}`;
+}
+
+/**
+ * Read every video in a public playlist straight off the watch pages.
+ * YouTube renders playlist rows lazily, so the first page carries only a
+ * continuation token and the rest arrive from the InnerTube browse endpoint.
+ */
+async function fetchPlaylistItems(playlistId) {
+    const html = await (
+        await fetch(`https://www.youtube.com/playlist?list=${playlistId}`, { headers: YT_HEADERS })
+    ).text();
+
+    const apiKey = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
+    const clientVersion = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1];
+    const initialMatch = html.match(/var ytInitialData = (\{.*?\});<\/script>/s);
+    if (!apiKey || !initialMatch) {
+        throw new Error('Could not read the playlist page (is the playlist public?).');
+    }
+    const initial = JSON.parse(initialMatch[1]);
+    const playlistTitle = initial?.metadata?.playlistMetadataRenderer?.title || playlistId;
+
+    const seen = new Set();
+    const items = [];
+    const collect = (node) => {
+        (function walk(n) {
+            if (!n || typeof n !== 'object') return;
+            if (Array.isArray(n)) return n.forEach(walk);
+
+            // Current shape: lockupViewModel. Older shape: playlistVideoRenderer.
+            const lockup = n.lockupViewModel;
+            if (lockup?.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && lockup.contentId && !seen.has(lockup.contentId)) {
+                seen.add(lockup.contentId);
+                items.push({
+                    videoId: lockup.contentId,
+                    title: lockup.metadata?.lockupMetadataViewModel?.title?.content || '',
+                });
+            }
+            const legacy = n.playlistVideoRenderer;
+            if (legacy?.videoId && !seen.has(legacy.videoId)) {
+                seen.add(legacy.videoId);
+                items.push({
+                    videoId: legacy.videoId,
+                    title: legacy.title?.runs?.map((r) => r.text).join('') || legacy.title?.simpleText || '',
+                });
+            }
+            for (const k in n) walk(n[k]);
+        })(node);
+    };
+    const nextToken = (node) => JSON.stringify(node).match(/"continuationCommand":\{"token":"([^"]+)"/)?.[1];
+
+    collect(initial);
+    let token = nextToken(initial);
+    const context = { client: { clientName: 'WEB', clientVersion: clientVersion || '2.20240101.00.00', hl: 'en', gl: 'US' } };
+
+    for (let page = 0; token && page < 60; page++) {
+        const before = items.length;
+        const res = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${apiKey}&prettyPrint=false`, {
+            method: 'POST',
+            headers: { ...YT_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context, continuation: token }),
+        });
+        const json = await res.json();
+        collect(json);
+        if (items.length === before) break;
+        token = nextToken(json);
+    }
+
+    return { playlistTitle, items };
+}
+
+/** Exact duration + upload date, read from the watch page (no API key needed). */
+async function fetchVideoDetails(videoId) {
+    try {
+        const html = await (
+            await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: YT_HEADERS })
+        ).text();
+        const m =
+            html.match(/var ytInitialPlayerResponse = (\{.*?\});var/s) ||
+            html.match(/ytInitialPlayerResponse\s*=\s*(\{.*?\});<\/script>/s);
+        if (!m) return null;
+        const pr = JSON.parse(m[1]);
+        return {
+            title: pr.videoDetails?.title || '',
+            lengthSeconds: Number(pr.videoDetails?.lengthSeconds) || 0,
+            description: (pr.videoDetails?.shortDescription || '').trim(),
+            uploadDate: (pr.microformat?.playerMicroformatRenderer?.uploadDate || '').slice(0, 10),
+        };
+    } catch {
+        return null;
+    }
 }
 
 async function fetchYoutubeMetadata(videoId) {
@@ -261,58 +431,82 @@ async function cmdImport(playlistUrl) {
         process.exit(1);
     }
 
-    console.log('\nPlaylist import requires a YouTube Data API key.');
-    console.log('Get one at: https://console.cloud.google.com/apis/credentials');
-    const apiKey = await prompt('YouTube API key (or press Enter to skip): ');
-    if (!apiKey) {
-        console.log('Skipping import. Use "add" command for single videos (no API key needed).');
-        process.exit(0);
-    }
-
     try {
-        const res = await fetch(
-            `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&key=${apiKey}`
-        );
-        const json = await res.json();
-        if (json.error) {
-            console.error('API error:', json.error.message);
-            process.exit(1);
-        }
-        const items = json.items || [];
+        console.log(`\nReading playlist ${playlistId} ...`);
+        const { playlistTitle, items } = await fetchPlaylistItems(playlistId);
+        console.log(`Playlist "${playlistTitle}": ${items.length} video(s) listed.`);
         if (items.length === 0) {
-            console.log('No videos in playlist.');
-            process.exit(0);
+            console.log('Nothing to import.');
+            return;
         }
 
         const data = loadData();
-        const existingIds = new Set(data.vods.map((v) => v.youtubeId));
-        let added = 0;
+        const existingVideoIds = new Set(data.vods.map((v) => v.youtubeId));
+        const takenIds = new Set(data.vods.map((v) => v.id));
+        // Same stream uploaded twice: identical date + title + runtime.
+        const fingerprints = new Set(data.vods.map((v) => `${v.date}|${v.title}|${v.durationSeconds}`));
 
-        for (const item of items) {
-            const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
-            if (!videoId || existingIds.has(videoId)) continue;
+        const added = [];
+        const skipped = [];
 
-            const title = item.snippet?.title || 'Untitled';
-            const published = item.snippet?.publishedAt?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+        for (const [i, item] of items.entries()) {
+            process.stdout.write(`  [${i + 1}/${items.length}] ${item.videoId} ... `);
 
+            if (existingVideoIds.has(item.videoId)) {
+                console.log('already archived');
+                skipped.push({ videoId: item.videoId, reason: 'already archived' });
+                continue;
+            }
+
+            const details = await fetchVideoDetails(item.videoId);
+            const rawTitle = details?.title || item.title || 'Untitled';
+            const parsed = parseRawTitle(rawTitle, details?.uploadDate || new Date().toISOString().slice(0, 10));
+            const title = cleanTitle(parsed.rest) || cleanTitle(rawTitle) || 'Untitled';
+            const date = parsed.date;
+            const durationSeconds = details?.lengthSeconds || 0;
+
+            const fingerprint = `${date}|${title}|${durationSeconds}`;
+            if (fingerprints.has(fingerprint)) {
+                console.log('duplicate upload');
+                skipped.push({ videoId: item.videoId, reason: `duplicate of an entry already added (${title})` });
+                continue;
+            }
+
+            const id = makeId(title, date, item.videoId, takenIds);
             const vod = {
-                id: slugify(title) || `vod-${videoId}`,
+                id,
                 title,
-                date: published,
+                date,
                 game: '',
                 tags: [],
-                duration: '',
-                durationSeconds: 0,
-                youtubeId: videoId,
-                description: '',
+                duration: durationSeconds > 0 ? formatDuration(durationSeconds) : '',
+                durationSeconds,
+                youtubeId: item.videoId,
+                description: details?.description || '',
             };
+            vod.tags = computeAutotags(vod);
+
             data.vods.push(vod);
-            existingIds.add(videoId);
-            added++;
+            existingVideoIds.add(item.videoId);
+            takenIds.add(id);
+            fingerprints.add(fingerprint);
+            added.push(vod);
+            console.log(`added (${date}, ${vod.duration || 'no duration'})`);
         }
 
         saveData(data);
-        console.log(`\nImported ${added} VOD(s).`);
+
+        console.log(`\nImported ${added.length} VOD(s); skipped ${skipped.length}.`);
+        for (const s of skipped) {
+            console.log(`  skipped ${s.videoId}: ${s.reason}`);
+        }
+        const missingGame = added.filter((v) => !v.game);
+        if (missingGame.length > 0) {
+            console.log(
+                `\n${missingGame.length} new entr${missingGame.length === 1 ? 'y has' : 'ies have'} no game set ` +
+                    '(YouTube exposes none). Set them with: node vod-manager.js edit <id>'
+            );
+        }
     } catch (err) {
         console.error('Import failed:', err.message);
         process.exit(1);
